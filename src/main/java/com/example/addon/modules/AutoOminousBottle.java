@@ -7,9 +7,9 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Items;
-import net.minecraft.util.Hand;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Items;
 
 public class AutoOminousBottle extends Module {
     private final SettingGroup sg = settings.getDefaultGroup();
@@ -33,15 +33,15 @@ public class AutoOminousBottle extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.interactionManager == null) return;
+        if (mc.player == null || mc.gameMode == null) return;
         if (timer > 0) { timer--; return; }
-        if (mc.player.hasStatusEffect(StatusEffects.BAD_OMEN)) return;
+        if (mc.player.hasEffect(MobEffects.BAD_OMEN)) return;
 
         FindItemResult bottle = InvUtils.findInHotbar(Items.OMINOUS_BOTTLE);
         if (!bottle.found()) return;
 
         if (!InvUtils.swap(bottle.slot(), swapBack.get())) return;
-        mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+        mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
         if (swapBack.get()) InvUtils.swapBack();
 
         timer = delay.get();
