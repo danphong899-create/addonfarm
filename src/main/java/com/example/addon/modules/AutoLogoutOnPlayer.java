@@ -6,8 +6,8 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,16 +36,16 @@ public class AutoLogoutOnPlayer extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.world == null || mc.getNetworkHandler() == null) return;
+        if (mc.player == null || mc.level == null || mc.getConnection() == null) return;
 
-        for (PlayerEntity p : mc.world.getPlayers()) {
+        for (Player p : mc.level.players()) {
             if (p == mc.player) continue;
             String name = p.getName().getString();
             if (ignoreFriends.get() && Friends.get().isFriend(p)) continue;
             if (ignoreNames.get().stream().anyMatch(n -> n.equalsIgnoreCase(name))) continue;
             if (range.get() > 0 && mc.player.distanceTo(p) > range.get()) continue;
 
-            mc.getNetworkHandler().getConnection().disconnect(Text.literal("[Donut] Logged out: " + name + " detected."));
+            mc.getConnection().getConnection().disconnect(Component.literal("[Donut] Logged out: " + name + " detected."));
             if (toggleOff.get()) toggle();
             return;
         }
