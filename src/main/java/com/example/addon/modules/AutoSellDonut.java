@@ -1,10 +1,12 @@
 package com.example.addon.modules;
 
 import com.example.addon.DonutAddon;
+import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
+import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -13,7 +15,6 @@ import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.world.inventory.ChestMenu;
-import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -50,13 +51,19 @@ public class AutoSellDonut extends Module {
     private State state = State.IDLE;
     private int timer;
     private int timeout;
+    private Screen openScreen; // tracked through OpenScreenEvent
 
     public AutoSellDonut() {
         super(DonutAddon.CATEGORY, "auto-sell", "Automates /sell: deposits items and confirms the dialog.");
     }
 
     @Override
-    public void onActivate() { state = State.IDLE; timer = 0; timeout = 0; }
+    public void onActivate() { state = State.IDLE; timer = 0; timeout = 0; openScreen = null; }
+
+    @EventHandler
+    private void onOpenScreen(OpenScreenEvent event) {
+        openScreen = event.screen;
+    }
 
     private boolean shouldSell(ItemStack s) {
         if (s.isEmpty()) return false;
@@ -71,7 +78,7 @@ public class AutoSellDonut extends Module {
 
         switch (state) {
             case IDLE -> {
-                if (mc.screen != null) return;
+                if (openScreen != null) return;
                 boolean any = false;
                 for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
                     if (shouldSell(mc.player.getInventory().getItem(i))) { any = true; break; }
@@ -82,18 +89,17 @@ public class AutoSellDonut extends Module {
                 timeout = 100;
             }
             case WAIT_MENU -> {
-                if (mc.screen instanceof ContainerScreen) { state = State.DEPOSIT; timer = actionDelay.get(); return; }
+                if (mc.player.containerMenu instanceof ChestMenu) { state = State.DEPOSIT; timer = actionDelay.get(); return; }
                 if (--timeout <= 0) { state = State.COOLDOWN; timer = cooldown.get(); }
             }
             case DEPOSIT -> {
-                if (!(mc.screen instanceof ContainerScreen screen)) { state = State.IDLE; return; }
-                ChestMenu menu = screen.getMenu();
+                if (!(mc.player.containerMenu instanceof ChestMenu menu)) { state = State.IDLE; return; }
                 int containerSize = menu.getRowCount() * 9;
 
                 boolean moved = false;
                 for (int i = containerSize; i < menu.slots.size(); i++) {
                     if (shouldSell(menu.slots.get(i).getItem())) {
-                        mc.gameMode.handleInventoryMouseClick(menu.containerId, i, 0, ClickType.QUICK_MOVE, mc.player);
+                        InvUtils.shiftClick().slotId(i);
                         moved = true;
                         break; // one stack per action
                     }
@@ -106,7 +112,7 @@ public class AutoSellDonut extends Module {
                 }
             }
             case WAIT_CONFIRM -> {
-                Screen s = mc.screen;
+                Screen s = openScreen;
                 if (s != null && !(s instanceof ContainerScreen) && clickConfirm(s)) {
                     if (notify.get()) info("Sold.");
                     state = State.COOLDOWN;
