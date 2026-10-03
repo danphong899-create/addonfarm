@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 
 public class DonutAddon extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("Donut", Items.COOKIE.getDefaultInstance());
+    public static final Category CATEGORY = new Category("Donut", () -> Items.COOKIE.getDefaultInstance());
 
     @Override
     public void onInitialize() {
