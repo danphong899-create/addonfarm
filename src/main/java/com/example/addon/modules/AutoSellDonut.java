@@ -6,24 +6,22 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.input.MouseInput;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Flow on DonutSMP: /sell -> container menu -> put items in -> close -> confirm dialog -> click Yes/Confirm.
- */
+/** Flow on DonutSMP: /sell -> container menu -> put items in -> close -> confirm dialog -> click Yes/Confirm. */
 public class AutoSellDonut extends Module {
     private enum State { IDLE, WAIT_MENU, DEPOSIT, WAIT_CONFIRM, COOLDOWN }
     public enum Mode { Whitelist, Blacklist }
@@ -68,15 +66,15 @@ public class AutoSellDonut extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.interactionManager == null) return;
+        if (mc.player == null || mc.gameMode == null) return;
         if (timer > 0) { timer--; return; }
 
         switch (state) {
             case IDLE -> {
-                if (mc.currentScreen != null) return;
+                if (mc.screen != null) return;
                 boolean any = false;
-                for (int i = 0; i < mc.player.getInventory().size(); i++) {
-                    if (shouldSell(mc.player.getInventory().getStack(i))) { any = true; break; }
+                for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
+                    if (shouldSell(mc.player.getInventory().getItem(i))) { any = true; break; }
                 }
                 if (!any) { timer = 20; return; }
                 ChatUtils.sendPlayerMsg("/sell");
@@ -84,32 +82,32 @@ public class AutoSellDonut extends Module {
                 timeout = 100;
             }
             case WAIT_MENU -> {
-                if (mc.currentScreen instanceof GenericContainerScreen) { state = State.DEPOSIT; timer = actionDelay.get(); return; }
+                if (mc.screen instanceof ContainerScreen) { state = State.DEPOSIT; timer = actionDelay.get(); return; }
                 if (--timeout <= 0) { state = State.COOLDOWN; timer = cooldown.get(); }
             }
             case DEPOSIT -> {
-                if (!(mc.currentScreen instanceof GenericContainerScreen screen)) { state = State.IDLE; return; }
-                GenericContainerScreenHandler h = screen.getScreenHandler();
-                int containerSize = h.getRows() * 9;
+                if (!(mc.screen instanceof ContainerScreen screen)) { state = State.IDLE; return; }
+                ChestMenu menu = screen.getMenu();
+                int containerSize = menu.getRowCount() * 9;
 
                 boolean moved = false;
-                for (int i = containerSize; i < h.slots.size(); i++) {
-                    if (shouldSell(h.slots.get(i).getStack())) {
-                        mc.interactionManager.clickSlot(h.syncId, i, 0, SlotActionType.QUICK_MOVE, mc.player);
+                for (int i = containerSize; i < menu.slots.size(); i++) {
+                    if (shouldSell(menu.slots.get(i).getItem())) {
+                        mc.gameMode.handleInventoryMouseClick(menu.containerId, i, 0, ClickType.QUICK_MOVE, mc.player);
                         moved = true;
-                        break; // one item stack per action
+                        break; // one stack per action
                     }
                 }
                 timer = actionDelay.get();
                 if (!moved) {
-                    mc.player.closeHandledScreen(); // closing the menu triggers the confirm dialog
+                    mc.player.closeContainer(); // closing the menu triggers the confirm dialog
                     state = State.WAIT_CONFIRM;
                     timeout = 60;
                 }
             }
             case WAIT_CONFIRM -> {
-                Screen s = mc.currentScreen;
-                if (s != null && !(s instanceof GenericContainerScreen) && clickConfirm(s)) {
+                Screen s = mc.screen;
+                if (s != null && !(s instanceof ContainerScreen) && clickConfirm(s)) {
                     if (notify.get()) info("Sold.");
                     state = State.COOLDOWN;
                     timer = cooldown.get();
@@ -123,13 +121,13 @@ public class AutoSellDonut extends Module {
 
     /** Finds a Yes/Confirm button on the dialog screen and clicks it. */
     private boolean clickConfirm(Screen screen) {
-        for (Element e : screen.children()) {
-            if (!(e instanceof ClickableWidget w) || !w.active) continue;
+        for (GuiEventListener e : screen.children()) {
+            if (!(e instanceof AbstractWidget w) || !w.active) continue;
             String t = w.getMessage().getString().toLowerCase(Locale.ROOT);
             if (t.contains("cancel") || t.contains("decline") || t.equals("no")) continue;
             if (t.contains("confirm") || t.contains("accept") || t.equals("yes") || t.contains("sell")) {
                 double x = w.getX() + w.getWidth() / 2.0, y = w.getY() + w.getHeight() / 2.0;
-                screen.mouseClicked(new Click(x, y, new MouseInput(0, 0)), false);
+                screen.mouseClicked(new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0)), false);
                 return true;
             }
         }
